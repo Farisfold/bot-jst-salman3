@@ -1,43 +1,42 @@
-var express = require('express');
-var r = express.Router();
+const tf = require('@tensorflow/tfjs-node');
 
-// load pre-trained model
-const model = require('./sdk/model.js');
+function normalized(data){ // i & r
+    i = (data[0] - 12.585) / 6.813882
+    r = (data[1] - 51.4795) / 29.151289
+    return [i, r]
+}
 
-// Bot Setting
-const TelegramBot = require('node-telegram-bot-api');
-const token = '1733547356:AAEOX7oG_z09vS34M-DUHOm5YCPsXYDXohg'
-const bot = new TelegramBot(token, {polling: true});
+function denormalized(data){
+    v = (data[0] * 552.6264) + 650.4795
+    p = (data[1] * 12153.8) + 10620.5615
+    return [v, p]
+}
 
 
-// bots
-bot.onText(/\/start/, (msg) => { 
-    console.log(msg)
-    bot.sendMessage(
-        msg.chat.id,
-        `hello ${msg.chat.first_name}, welcome...\n
-        click /menu to main menu`
-    );   
-});
+async function predict(data){
+    let in_dim = 2;
+    
+    data = normalized(data);
+    shape = [1, in_dim];
 
-bot.onText(/\/menu/, (msg) => { 
-    console.log(msg)
-    bot.sendMessage(
-        msg.chat.id,
-        `this is your main menu`
-    );   
-});
+    tf_data = tf.tensor2d(data, shape);
 
-// routers
-r.get('/prediction/:i/:r', function(req, res, next) {    
-    model.predict(
-        [
-            parseFloat(req.params.i), // string to float
-            parseFloat(req.params.r)
-        ]
-    ).then((jres)=>{
-        res.json(jres);
-    })
-});
+    try{
+        // path load in public access => github
+        const path = 'https://raw.githubusercontent.com/Farisfold/Bot-jst-salman2/main/public/cls_model/model.json';
+        const model = await tf.loadGraphModel(path);
+        
+        predict = model.predict(
+                tf_data
+        );
+        result = predict.dataSync();
+        return denormalized( result );
+        
+    }catch(e){
+      console.log(e);
+    }
+}
 
-module.exports = r;
+module.exports = {
+    predict: predict 
+}
